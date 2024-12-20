@@ -12,14 +12,19 @@ import javax.print.*;
 import javax.print.attribute.*;
 import javax.print.attribute.standard.*;
 import java.io.*;
+import java.text.SimpleDateFormat;
 import java.util.List;
 
 public class TicketPrinter {
 
     public static void printTicket(List<String> products, List<Integer> quantities, List<Double> productTotalPrices, double globalTotalPrice) {
         // Define the content of the ticket
+            java.util.Date fechaHoy = new java.util.Date();       
+        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
+        String fechaHoyStr = sdf.format(fechaHoy);
         StringBuilder ticket = new StringBuilder();
         ticket.append("******* TICKET DE VENTA ********\n");
+         ticket.append("Fecha: ").append(fechaHoyStr ).append("\n");
         
         for (int i = 0; i < products.size(); i++) {
             ticket.append("Producto: ").append(products.get(i)).append("\n");
