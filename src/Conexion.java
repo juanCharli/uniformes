@@ -16,10 +16,10 @@ import java.sql.SQLException;
 import javax.swing.JOptionPane;
 
 public class Conexion {
-    private static final String URL = "jdbc:mysql://db-casahogar.cpskw68mqfah.us-east-2.rds.amazonaws.com/uniformes";
+    private static final String URL = "jdbc:mysql://localhost:3306/tienda";
     private static  String USER;
     private static  String PASSWORD;
-
+    
     public static Connection getConnection() throws SQLException {
         return DriverManager.getConnection(URL, USER, PASSWORD);
     }
