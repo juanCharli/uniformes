@@ -6,6 +6,9 @@
  *
  * @author Juan Carlos
  */
+import dao.*;
+import conexion.Conexion;
+import modelo.Usuarios;
 import com.itextpdf.kernel.pdf.PdfDocument;
 import com.itextpdf.kernel.pdf.PdfWriter;
 import com.itextpdf.layout.Document;
@@ -31,24 +34,30 @@ import org.jdatepicker.impl.UtilDateModel;
 import java.sql.SQLException;
 
 public class Panel_Inventario extends PanelBase {
-    
+
     private JButton historyButton;
     private DefaultTableModel inventoryTableModel;
-    
-    public Panel_Inventario() {
+    private ModeloInventario mi;
+    private ModeloProducto mp;
+    private Usuarios user;
+
+    public Panel_Inventario() throws SQLException {
         super();
+        this.mi = new ModeloInventario();
+        this.mp = new ModeloProducto();
+        this.user = new Usuarios();
         setupInventoryUI();
     }
-    
+
     private void setupInventoryUI() {
         // Configuración específica del panel de inventario
         inventoryTableModel = new DefaultTableModel(
                 new Object[]{"Categoría", "Producto", "Talla", "Cantidad"}, 0);
         inventoryTable = new JTable(inventoryTableModel);
         add(new JScrollPane(inventoryTable), BorderLayout.CENTER);
-        
+
         JPanel bottomPanel = new JPanel();
-        ventasboton=new JButton("Historial de ventas");
+        ventasboton = new JButton("Historial de ventas");
         registerButton = new JButton("Registrar Ingresos");
         registerButton.setBackground(Color.GREEN);
         cancelButton = new JButton("Cancelar Ingreso");
@@ -68,7 +77,7 @@ public class Panel_Inventario extends PanelBase {
         historyButton.addActionListener(e -> showIncomeHistory());
         ventasboton.addActionListener(e -> PanelHistorial());
     }
-    
+
     private void addToRegister() {
         String category = (String) categoryComboBox.getSelectedItem();
         String type = (String) typeComboBox.getSelectedItem();
@@ -80,7 +89,7 @@ public class Panel_Inventario extends PanelBase {
             JOptionPane.showMessageDialog(this, "Todos los campos son obligatorios.", "Error", JOptionPane.ERROR_MESSAGE);
             return;
         }
-        
+
         int quantity;
         try {
             quantity = Integer.parseInt(quantityStr);
@@ -95,36 +104,37 @@ public class Panel_Inventario extends PanelBase {
 
         // Limpiar campos
         quantityField.setText("");
-        
+
     }
-    
-    @Override
+
     protected void registerAll() {
         // Lógica de registro de inventario
-        try (Connection connection = Conexion.getConnection()) {
-            String sql = "INSERT INTO Ingresos (id_producto, id_usuario, cantidad, fecha_hora) VALUES (?, ?, ?, ?)";
-            try (PreparedStatement stmt = connection.prepareStatement(sql)) {
-                for (int i = 0; i < inventoryTableModel.getRowCount(); i++) {
-                    String category = (String) inventoryTableModel.getValueAt(i, 0);
-                    String type = (String) inventoryTableModel.getValueAt(i, 1);
-                    String product = (String) inventoryTableModel.getValueAt(i, 2);
-                    int quantity = (int) inventoryTableModel.getValueAt(i, 3);
-                    int productId = getProductID(category, type, product);
-                    stmt.setInt(1, productId);
-                    stmt.setInt(2, getUserID());
-                    stmt.setInt(3, quantity);
-                    stmt.setTimestamp(4, new java.sql.Timestamp(System.currentTimeMillis()));
-                    stmt.addBatch();
-                }
-                stmt.executeBatch();
-                inventoryTableModel.setRowCount(0);
-                JOptionPane.showMessageDialog(this, "Ingresos registrados");
-            }
-        } catch (SQLException e) {
-            e.printStackTrace();
+        int rows = inventoryTableModel.getRowCount();
+        if (rows == 0) {
+            JOptionPane.showMessageDialog(this, "No hay registros para ingresar.", "Error", JOptionPane.ERROR_MESSAGE);
+            return;
         }
+
+        for (int i = 0; i < rows; i++) {
+            String categoria = (String) inventoryTableModel.getValueAt(i, 0);
+            String tipo = (String) inventoryTableModel.getValueAt(i, 1);
+            String producto = (String) inventoryTableModel.getValueAt(i, 2);
+            int cantidad = (int) inventoryTableModel.getValueAt(i, 3);
+
+            int productId = mp.getProductID(categoria, tipo, producto);
+            if (productId != 0) {
+                boolean success = mi.registrarIngreso(productId, user.getIdUsuario(), cantidad);
+                if (!success) {
+                    JOptionPane.showMessageDialog(this, "Error al registrar ingreso.", "Error", JOptionPane.ERROR_MESSAGE);
+                    return;
+                }
+            }
+        }
+
+        inventoryTableModel.setRowCount(0);
+        JOptionPane.showMessageDialog(this, "Ingresos registrados correctamente.", "Éxito", JOptionPane.INFORMATION_MESSAGE);
     }
-    
+
     private void cancelSelectedRow() {
         int selectedRow = inventoryTable.getSelectedRow();
         if (selectedRow != -1) {
@@ -138,7 +148,7 @@ public class Panel_Inventario extends PanelBase {
         historyFrame.setSize(800, 600);
         historyFrame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
         historyFrame.setLayout(new BorderLayout());
-        
+
         JPanel contentPanel = new JPanel(new GridLayout(2, 1));
 
         // Panel del historial de ingresos
@@ -154,7 +164,7 @@ public class Panel_Inventario extends PanelBase {
         JTable stockTable = new JTable(stockTableModel);
         stockPanel.add(new JScrollPane(stockTable), BorderLayout.CENTER);
         contentPanel.add(stockPanel);
-        
+
         historyFrame.add(contentPanel, BorderLayout.CENTER);
 
         // Botón para exportar a PDF
@@ -188,7 +198,7 @@ public class Panel_Inventario extends PanelBase {
                     int quantity = resultSet.getInt("cantidad");
                     Timestamp timestamp = resultSet.getTimestamp("fecha_hora");
                     String description = resultSet.getString("descripcion");
-                    
+
                     Object[] row = {productName, description, quantity, timestamp.toString()};
                     historyTableModel.addRow(row);
                 }
@@ -210,7 +220,7 @@ public class Panel_Inventario extends PanelBase {
                     String description = resultSet.getString("descripcion");
                     int totalQuantity = resultSet.getInt("cantidad");
                     double price = resultSet.getDouble("precio");
-                    
+
                     Object[] row = {productId, productName, description, totalQuantity, price};
                     stockTableModel.addRow(row);
                 }
@@ -219,31 +229,31 @@ public class Panel_Inventario extends PanelBase {
             e.printStackTrace();
             JOptionPane.showMessageDialog(this, "Error al cargar el stock actual.", "Error", JOptionPane.ERROR_MESSAGE);
         }
-        
+
         historyFrame.setVisible(true);
     }
-    
+
     private void exportToPDF(DefaultTableModel historyTableModel, DefaultTableModel stockTableModel) throws IOException {
         JFileChooser fileChooser = new JFileChooser();
         fileChooser.setDialogTitle("Guardar PDF");
         int userSelection = fileChooser.showSaveDialog(null);
         if (userSelection == JFileChooser.APPROVE_OPTION) {
             File fileToSave = fileChooser.getSelectedFile();
-            
+
             PdfWriter writer = new PdfWriter(fileToSave.getAbsolutePath() + ".pdf");
             PdfDocument pdfDoc = new PdfDocument(writer);
             Document document = new Document(pdfDoc);
-            
+
             document.add(new Paragraph("Historial de Ingresos del Mes Actual").setBold().setFontSize(18));
             addTableToDocument(historyTableModel, document);
-            
+
             document.add(new Paragraph("\n\nStock Actual").setBold().setFontSize(18));
             addTableToDocument(stockTableModel, document);
-            
+
             document.close();
         }
     }
-    
+
     private void addTableToDocument(DefaultTableModel tableModel, Document document) {
         int numCols = tableModel.getColumnCount();
         Table table = new Table(UnitValue.createPercentArray(numCols)).useAllAvailableWidth();
@@ -260,10 +270,10 @@ public class Panel_Inventario extends PanelBase {
                 table.addCell(new Paragraph(tableModel.getValueAt(row, col).toString()));
             }
         }
-        
+
         document.add(table);
     }
-    
+
     private void PanelHistorial() {
         JFrame historyFrame = new JFrame("Historial de Ventas");
         historyFrame.setSize(800, 600);
@@ -285,12 +295,12 @@ public class Panel_Inventario extends PanelBase {
         JDatePanelImpl datePanelFin = new JDatePanelImpl(modelFin, new Properties());
         JDatePickerImpl datePickerInicio = new JDatePickerImpl(datePanelInicio, new DateLabelFormatter());
         JDatePickerImpl datePickerFin = new JDatePickerImpl(datePanelFin, new DateLabelFormatter());
-        
+
         panelFiltros.add(new JLabel("Fecha Inicio:"));
         panelFiltros.add(datePickerInicio);
         panelFiltros.add(new JLabel("Fecha Fin:"));
         panelFiltros.add(datePickerFin);
-        
+
         historyFrame.add(panelFiltros, BorderLayout.NORTH);
 
         // Panel del historial de ingresos
@@ -315,12 +325,12 @@ public class Panel_Inventario extends PanelBase {
         JButton exportButton = new JButton("Exportar a PDF");
         JButton filterButton = new JButton("Buscar");
         JButton clearFiltersButton = new JButton("Limpiar Filtros");
-        
+
         JLabel precios = new JLabel("<hrml><b>El total vendido es: 0.0</hmtl></b>");
         buttonPanel.add(filterButton);
         buttonPanel.add(clearFiltersButton);
         buttonPanel.add(exportButton);
-        
+
         buttonPanel.add(precios); // Añadir el JLabel al panel de botones
         historyFrame.add(buttonPanel, BorderLayout.SOUTH);
 
@@ -334,14 +344,14 @@ public class Panel_Inventario extends PanelBase {
                 // Obtener las fechas seleccionadas
                 java.util.Date startValue = (java.util.Date) datePickerInicio.getModel().getValue();
                 java.util.Date endValue = (java.util.Date) datePickerFin.getModel().getValue();
-                
+
                 java.sql.Date sqlStartDate = null;
                 java.sql.Date sqlEndDate = null;
-                
+
                 if (startValue != null) {
                     sqlStartDate = new java.sql.Date(startValue.getTime());
                 }
-                
+
                 if (endValue != null) {
                     sqlEndDate = new java.sql.Date(endValue.getTime());
                 }
@@ -352,7 +362,7 @@ public class Panel_Inventario extends PanelBase {
                 updateTotalPriceLabel(historyTableModel, precios); // Actualizar el JLabel después de filtrar
             }
         });
-        
+
         clearFiltersButton.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
@@ -363,7 +373,7 @@ public class Panel_Inventario extends PanelBase {
                 total = 0;
             }
         });
-        
+
         exportButton.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
@@ -387,7 +397,7 @@ public class Panel_Inventario extends PanelBase {
                     String description = resultSet.getString("descripcion");
                     int totalQuantity = resultSet.getInt("cantidad");
                     double price = resultSet.getDouble("precio");
-                    
+
                     Object[] row = {productId, productName, description, totalQuantity, price};
                     stockTableModel.addRow(row);
                 }
@@ -396,28 +406,28 @@ public class Panel_Inventario extends PanelBase {
             e.printStackTrace();
             JOptionPane.showMessageDialog(this, "Error al cargar el stock actual.", "Error", JOptionPane.ERROR_MESSAGE);
         }
-        
+
         historyFrame.setVisible(true);
     }
-    
+
     private void exportToPDF(DefaultTableModel historyTableModel) throws IOException {
         JFileChooser fileChooser = new JFileChooser();
         fileChooser.setDialogTitle("Guardar PDF");
         int userSelection = fileChooser.showSaveDialog(null);
         if (userSelection == JFileChooser.APPROVE_OPTION) {
             File fileToSave = fileChooser.getSelectedFile();
-            
+
             PdfWriter writer = new PdfWriter(fileToSave.getAbsolutePath() + ".pdf");
             PdfDocument pdfDoc = new PdfDocument(writer);
             Document document = new Document(pdfDoc);
-            
+
             document.add(new Paragraph("Historial de ventas del Mes Actual").setBold().setFontSize(18));
             addTableToDocument(historyTableModel, document);
-            
+
             document.close();
         }
     }
-    
+
     private void loadIncomeHistory(DefaultTableModel historyTableModel, Date startDate, Date endDate) {
         historyTableModel.setRowCount(0); // Limpiar la tabla
         try (Connection connection = Conexion.getConnection()) {
@@ -425,22 +435,22 @@ public class Panel_Inventario extends PanelBase {
                     + "FROM Ventas V "
                     + "JOIN Productos p ON V.id_producto = p.id_producto "
                     + "WHERE V.fecha_hora BETWEEN ? AND ?";
-            
+
             try (PreparedStatement statement = connection.prepareStatement(sql)) {
                 // Convertir java.util.Date a java.sql.Date
                 java.sql.Date sqlStartDate = null;
                 java.sql.Date sqlEndDate = null;
-                
+
                 if (startDate != null) {
                     sqlStartDate = new java.sql.Date(startDate.getTime());
                 }
                 if (endDate != null) {
                     sqlEndDate = new java.sql.Date(endDate.getTime());
                 }
-                
+
                 statement.setDate(1, sqlStartDate);
                 statement.setDate(2, sqlEndDate);
-                
+
                 try (ResultSet resultSet = statement.executeQuery()) {
                     while (resultSet.next()) {
                         String productName = resultSet.getString("producto");
@@ -449,7 +459,7 @@ public class Panel_Inventario extends PanelBase {
                         Date date = resultSet.getDate("fecha_hora");
                         double totalPrice = resultSet.getDouble("precio_total");
                         int orderId = resultSet.getInt("id_orden");
-                        
+
                         Object[] row = {productName, talla, quantity, date.toString(), totalPrice, orderId};
                         historyTableModel.addRow(row);
                     }
@@ -460,7 +470,7 @@ public class Panel_Inventario extends PanelBase {
             JOptionPane.showMessageDialog(null, "Error al cargar el historial de ventas.", "Error", JOptionPane.ERROR_MESSAGE);
         }
     }
-    
+
     private void updateTotalPriceLabel(DefaultTableModel tableModel, JLabel totalLabel) {
         total = 0;
         for (int i = 0; i < tableModel.getRowCount(); i++) {
@@ -478,5 +488,5 @@ public class Panel_Inventario extends PanelBase {
         }
         totalLabel.setText("<html><b> El total vendido es: " + total + "</html></b>");
     }
-    
+
 }

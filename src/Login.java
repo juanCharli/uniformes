@@ -1,4 +1,5 @@
 
+import conexion.Conexion;
 import java.awt.Color;
 import java.sql.SQLException;
 import java.util.logging.Level;
@@ -6,6 +7,7 @@ import java.util.logging.Logger;
 import javax.swing.JFrame;
 import javax.swing.SwingUtilities;
 import javax.swing.*;
+
 /*
  * To change this license header, choose License Headers in Project Properties.
  * To change this template file, choose Tools | Templates
@@ -17,11 +19,14 @@ import javax.swing.*;
  * @author mauri
  */
 public class Login extends javax.swing.JFrame {
-    Conexion conexion= new Conexion();
-int xmouse,ymouse;
+
+    Conexion conexion = new Conexion();
+    int xmouse, ymouse;
+
     public Login() {
         initComponents();
     }
+
     /**
      * This method is called from within the constructor to initialize the form.
      * WARNING: Do NOT modify this code. The content of this method is always
@@ -198,105 +203,110 @@ int xmouse,ymouse;
 
     private void moivimientoMousePressed(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_moivimientoMousePressed
 
-  xmouse=evt.getX();
-  ymouse=evt.getY();
-        
-        
+        xmouse = evt.getX();
+        ymouse = evt.getY();
+
+
     }//GEN-LAST:event_moivimientoMousePressed
 
     private void moivimientoMouseDragged(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_moivimientoMouseDragged
-  int x=evt.getXOnScreen();
-  int y=evt.getYOnScreen();
-  this.setLocation(x-xmouse,y-ymouse);
+        int x = evt.getXOnScreen();
+        int y = evt.getYOnScreen();
+        this.setLocation(x - xmouse, y - ymouse);
     }//GEN-LAST:event_moivimientoMouseDragged
 
     private void xMouseClicked(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_xMouseClicked
-    System.exit(0);
+        System.exit(0);
     }//GEN-LAST:event_xMouseClicked
 
     private void xMouseEntered(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_xMouseEntered
-    salirboton.setBackground(Color.red);
-     x.setForeground(Color.white);
+        salirboton.setBackground(Color.red);
+        x.setForeground(Color.white);
     }//GEN-LAST:event_xMouseEntered
 
     private void xMouseExited(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_xMouseExited
-      salirboton.setBackground(Color.white);
-      x.setForeground(Color.black);
+        salirboton.setBackground(Color.white);
+        x.setForeground(Color.black);
     }//GEN-LAST:event_xMouseExited
 
     private void entarMouseEntered(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_entarMouseEntered
-       Botonentrar.setBackground(new Color (0,165,237));
+        Botonentrar.setBackground(new Color(0, 165, 237));
     }//GEN-LAST:event_entarMouseEntered
 
     private void entarMouseExited(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_entarMouseExited
-    Botonentrar.setBackground(new Color (0,152,219));
+        Botonentrar.setBackground(new Color(0, 152, 219));
     }//GEN-LAST:event_entarMouseExited
 
     private void textusuariosMousePressed(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_textusuariosMousePressed
-      if(textusuarios.getText().equals("ingrese su usuario")){
-           textusuarios.setText("");
-      textusuarios.setForeground(Color.black); 
-      }
-    
-     if(String.valueOf(textcontraseña.getPassword()).isEmpty()){
-        textcontraseña.setText("**********");
-      textcontraseña.setForeground(Color.gray);  
-     }
-     
+        if (textusuarios.getText().equals("ingrese su usuario")) {
+            textusuarios.setText("");
+            textusuarios.setForeground(Color.black);
+        }
+
+        if (String.valueOf(textcontraseña.getPassword()).isEmpty()) {
+            textcontraseña.setText("**********");
+            textcontraseña.setForeground(Color.gray);
+        }
+
     }//GEN-LAST:event_textusuariosMousePressed
 
     private void textcontraseñaMousePressed(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_textcontraseñaMousePressed
-    if(textusuarios.getText().isEmpty()){
-           textusuarios.setText("ingrese su usuario");
-      textusuarios.setForeground(Color.gray); 
-    }      
-    
-  if(String.valueOf(textcontraseña.getPassword()).equals("**********")){
-        textcontraseña.setText("");
-      textcontraseña.setForeground(Color.black);  
-  }
+        if (textusuarios.getText().isEmpty()) {
+            textusuarios.setText("ingrese su usuario");
+            textusuarios.setForeground(Color.gray);
+        }
+
+        if (String.valueOf(textcontraseña.getPassword()).equals("**********")) {
+            textcontraseña.setText("");
+            textcontraseña.setForeground(Color.black);
+        }
     }//GEN-LAST:event_textcontraseñaMousePressed
 
     private void entarMouseClicked(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_entarMouseClicked
-       String contra= String.valueOf(textcontraseña.getPassword());
-       String rol="";
+        String contra = String.valueOf(textcontraseña.getPassword());
+        String rol = "";
         try {
             conexion.Declarar(textusuarios.getText(), contra);
-            rol=conexion.ObtenerUsuario();
+            rol = conexion.ObtenerUsuario();
         } catch (SQLException ex) {
             Logger.getLogger(Login.class.getName()).log(Level.SEVERE, null, ex);
         }
-        if(rol.equals("administrador")){
-             this.dispose();
-             
-                   SwingUtilities.invokeLater(() -> {
-            JFrame frame = new JFrame("Sistema de Inventario");
-             
-            frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-            frame.setSize(1000, 400);
-            frame.setLocationRelativeTo(null);
-            frame.setContentPane(new Panel_Inventario());
-            frame.setVisible(true);
-        });
-             
+        if (rol.equals("administrador")) {
+            this.dispose();
+
+            SwingUtilities.invokeLater(() -> {
+                JFrame frame = new JFrame("Sistema de Inventario");
+
+                frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+                frame.setSize(1000, 400);
+                frame.setLocationRelativeTo(null);
+                try {
+                    frame.setContentPane(new Panel_Inventario());
+                } catch (SQLException ex) {
+                    Logger.getLogger(Login.class.getName()).log(Level.SEVERE, null, ex);
+                }
+                frame.setVisible(true);
+            });
+
+        } else if (rol.equals("vendedor")) {
+            this.dispose();
+
+            SwingUtilities.invokeLater(() -> {
+                JFrame frame = new JFrame("Sistema de ventas");
+                frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+                frame.setSize(1000, 400);
+                frame.setLocationRelativeTo(null);
+                try {
+                    frame.setContentPane(new Panel_Ventas());
+                } catch (SQLException ex) {
+                    Logger.getLogger(Login.class.getName()).log(Level.SEVERE, null, ex);
+                }
+                frame.setVisible(true);
+            });
         }
-        else if (rol.equals("vendedor")){
-                   this.dispose();
-             
-                   SwingUtilities.invokeLater(() -> {
-            JFrame frame = new JFrame("Sistema de ventas");
-            frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-            frame.setSize(1000, 400);
-            frame.setLocationRelativeTo(null);
-            frame.setContentPane(new Panel_Ventas());
-            frame.setVisible(true);
-        });
-        } 
-      
+
     }//GEN-LAST:event_entarMouseClicked
-    
-    
-    
+
     /**
      * @param args the command line arguments
      */
@@ -332,7 +342,7 @@ int xmouse,ymouse;
         });
     }
 
-    
+
     // Variables declaration - do not modify//GEN-BEGIN:variables
     private javax.swing.JPanel Botonentrar;
     private javax.swing.JLabel contra;

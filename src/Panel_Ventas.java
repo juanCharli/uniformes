@@ -8,6 +8,9 @@
  *
  * @author mauri
  */
+import conexion.Conexion;
+import dao.*;
+import modelo.Usuarios;
 import com.itextpdf.kernel.pdf.PdfDocument;
 import com.itextpdf.kernel.pdf.PdfWriter;
 import com.itextpdf.layout.Document;
@@ -38,9 +41,15 @@ public class Panel_Ventas extends PanelBase {
     private DefaultTableModel inventoryTableModel;
     private JLabel totalPriceLabel;
     private double total = 0.0;
+    private ModeloVentas mv;
+    private Usuarios user;
+    private ModeloProducto mp;
 
-    public Panel_Ventas() {
+    public Panel_Ventas() throws SQLException {
         super();
+        mv = new ModeloVentas();
+        user = new Usuarios();
+        mp = new ModeloProducto();
         setupSalesUI();
     }
 
@@ -89,9 +98,8 @@ public class Panel_Ventas extends PanelBase {
             JOptionPane.showMessageDialog(this, "Cantidad debe ser un número.", "Error", JOptionPane.ERROR_MESSAGE);
             return;
         }
-        int productId = getProductID(category, type, product);
-        String id = String.valueOf(productId);
-        double unitPrice = getUnitPrice(id);
+        int productId = mp.getProductID(category, type, product);
+        double unitPrice = mv.getUnitPrice(productId);
         double totalPriceForRow = Double.parseDouble(quantityStr) * unitPrice;
 
         // Añadir registro a la tabla de inventario
@@ -118,8 +126,7 @@ public class Panel_Ventas extends PanelBase {
         }
         totalPriceLabel.setText("<html><b>Precio total: $" + String.format("%.2f", totalPrice) + "</b></html>");
     }
-    
-    @Override
+
     protected void registerAll() {
         int rows = inventoryTableModel.getRowCount();
         if (rows == 0) {
@@ -127,146 +134,34 @@ public class Panel_Ventas extends PanelBase {
             return;
         }
 
-        try (Connection connection = Conexion.getConnection()) {
-            connection.setAutoCommit(false); // Para manejo de transacciones
+        List<Object[]> ventas = new ArrayList<>();
+        for (int i = 0; i < rows; i++) {
+            ventas.add(new Object[]{
+                inventoryTableModel.getValueAt(i, 0), // Categoría
+                inventoryTableModel.getValueAt(i, 1), // Tipo
+                inventoryTableModel.getValueAt(i, 2), // Producto
+                inventoryTableModel.getValueAt(i, 3), // Cantidad
+                inventoryTableModel.getValueAt(i, 4), // Precio Unitario
+                inventoryTableModel.getValueAt(i, 5) // Precio Total
+            });
+        }
 
-            boolean hayInventarioSuficiente = true;
-            String sqlVentas = "INSERT INTO Ventas (id_producto, id_usuario, cantidad, fecha_hora, id_orden, precio_total) VALUES (?, ?, ?, ?, ?, ?)";
+        boolean success = mv.registrarVenta(ventas, getUserID());
 
-            try (PreparedStatement statementVentas = connection.prepareStatement(sqlVentas)) {
-
-                // Paso 1: Insertar una nueva orden en la tabla Ordenes
-                String sqlOrden = "INSERT INTO Ordenes (id_usuario, fecha_hora) VALUES (?, ?)";
-                int idOrden;
-                try (PreparedStatement statementOrden = connection.prepareStatement(sqlOrden, Statement.RETURN_GENERATED_KEYS)) {
-                    statementOrden.setInt(1, getUserID()); // Implementar getUserID para obtener el ID del usuario actual
-                    statementOrden.setTimestamp(2, new Timestamp(new java.util.Date().getTime()));
-                    statementOrden.executeUpdate();
-
-                    try (ResultSet generatedKeys = statementOrden.getGeneratedKeys()) {
-                        if (generatedKeys.next()) {
-                            idOrden = generatedKeys.getInt(1);
-                        } else {
-                            throw new SQLException("Error al obtener el ID de la nueva orden.");
-                        }
-                    }
-                }
-
-                // Variable para almacenar el tipo que falta
-                String tipoFaltante = "";
-
-                // Listas para almacenar los datos del ticket
-                List<String> products = new ArrayList<>();
-                List<Integer> quantities = new ArrayList<>();
-                List<Double> productTotalPrices = new ArrayList<>();
-                double globalTotalPrice = 0.0;
-
-                // Paso 2: Procesar cada registro en inventoryTableModel
-                for (int i = 0; i < rows; i++) {
-                    String category = (String) inventoryTableModel.getValueAt(i, 0);
-                    String type = (String) inventoryTableModel.getValueAt(i, 1);
-                    String product = (String) inventoryTableModel.getValueAt(i, 2);
-                    int quantity = (int) inventoryTableModel.getValueAt(i, 3);
-                    Double price = (Double) inventoryTableModel.getValueAt(i, 4);
-                    Double totalPriceForRow = (Double) inventoryTableModel.getValueAt(i, 5);
-                    int productID = getProductID(category, type, product); // Implementar getProductID para obtener el ID del producto
-                    System.out.println(productID);
-                    System.out.println(quantity);
-                    // Verificar si hay suficiente inventario
-                    if (!checkStock(productID, quantity)) {
-                        hayInventarioSuficiente = false;
-                        tipoFaltante = type; // Almacenar el tipo que falta
-                        break;
-                    }
-
-                    System.out.println(quantity);
-                    // Registrar la venta
-                    statementVentas.setInt(1, productID);
-                    statementVentas.setInt(2, getUserID()); // Implementar getUserID para obtener el ID del usuario actual
-                    statementVentas.setInt(3, quantity);
-                    statementVentas.setTimestamp(4, new Timestamp(new java.util.Date().getTime()));
-                    statementVentas.setInt(5, idOrden); // Asociar con la orden
-                    statementVentas.setDouble(6, totalPriceForRow);
-                    statementVentas.addBatch();
-
-                    // Agregar a las listas del ticket
-                    products.add(type);
-                    quantities.add(quantity);
-                    productTotalPrices.add(totalPriceForRow);
-                    globalTotalPrice += totalPriceForRow;
-                }
-
-                // Ejecutar todas las ventas en batch
-                statementVentas.executeBatch();
-
-                if (hayInventarioSuficiente) {
-                    connection.commit(); // Confirmar transacción
-
-                    // Limpiar la tabla después de registrar los ingresos
-                    inventoryTableModel.setRowCount(0);
-                    updateTotalPrice();
-
-                    // Imprimir el ticket
-                    TicketPrinter.printTicket(products, quantities, productTotalPrices, globalTotalPrice);
-
-                    JOptionPane.showMessageDialog(this, "Venta realizada exitosamente.", "Éxito", JOptionPane.INFORMATION_MESSAGE);
-                } else {
-                    connection.rollback(); // Revertir transacción si no hay inventario suficiente
-                    JOptionPane.showMessageDialog(this, "No hay suficiente inventario disponible para registrar. Falta el tipo: " + tipoFaltante, "Error", JOptionPane.ERROR_MESSAGE);
-                }
-            }
-        } catch (SQLException e) {
-            e.printStackTrace();
-            JOptionPane.showMessageDialog(this, "Error al registrar los ingresos en la base de datos: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+        if (success) {
+            inventoryTableModel.setRowCount(0);
+            updateTotalPrice();
+            JOptionPane.showMessageDialog(this, "Venta realizada exitosamente.", "Éxito", JOptionPane.INFORMATION_MESSAGE);
+        } else {
+            JOptionPane.showMessageDialog(this, "No hay suficiente inventario o ocurrió un error.", "Error", JOptionPane.ERROR_MESSAGE);
         }
     }
 
-    private boolean checkStock(int productID, int quantity) {
-        boolean hayStock = false;
-        try (Connection connection = Conexion.getConnection()) {
-            String sql = "SELECT cantidad FROM Inventario WHERE id_producto = ?";
-
-            try (PreparedStatement statement = connection.prepareStatement(sql)) {
-                statement.setInt(1, productID);
-
-                try (ResultSet resultSet = statement.executeQuery()) {
-                    if (resultSet.next()) {
-                        int stock = resultSet.getInt("cantidad");
-                        hayStock = stock >= quantity;
-                    }
-                }
-            }
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
-        return hayStock;
-    }
-
-
-    @Override
     protected int getUserID() {
         // Implementa la lógica para obtener el ID del usuario actual
         // Podrías almacenar el ID del usuario en una variable de sesión al iniciar sesión
         // Aquí se asume un valor fijo para simplificación
         return 2;
-    }
-
-    private double getUnitPrice(String id) {
-        double price = -1;
-        try (Connection connection = Conexion.getConnection()) {
-            String sql = "SELECT precio FROM Productos WHERE id_producto = ?";
-            try (PreparedStatement statement = connection.prepareStatement(sql)) {
-                statement.setString(1, id);
-                try (ResultSet resultSet = statement.executeQuery()) {
-                    if (resultSet.next()) {
-                        price = resultSet.getDouble("precio");
-                    }
-                }
-            }
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
-        return price;
     }
 
     private void cancelSelectedRow() {

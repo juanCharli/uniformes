@@ -7,14 +7,12 @@
  *
  * @author Juan Carlos
  */
+import dao.*;
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
 import java.sql.*;
-import java.util.ArrayList;
-import java.util.List;
+
 
 public abstract class PanelBase extends JPanel {
 
@@ -33,11 +31,15 @@ public abstract class PanelBase extends JPanel {
     protected JLabel producto;
     protected JLabel cantidad;
     protected double total;
+    private ModeloInventario mi;
+    private ModeloProducto mp;
 
-    public PanelBase() {
+    public PanelBase() throws SQLException {
         setupUI();
         setupComboBoxListeners();
-        loadCategories();
+        this.mi = new ModeloInventario();
+        this.mp = new ModeloProducto();
+        getCategorias();
     }
 
     private void setupUI() {
@@ -120,95 +122,25 @@ public abstract class PanelBase extends JPanel {
     }
 
     private void setupComboBoxListeners() {
-        categoryComboBox.addActionListener(e -> updateTypeComboBox());
-        typeComboBox.addActionListener(e -> updateProductComboBox());
+        categoryComboBox.addActionListener(e -> getTiposPorCategoria());
+        typeComboBox.addActionListener(e -> getProductosPorTipo());
     }
 
-    protected void loadCategories() {
-        List<String> categories = new ArrayList<>();
-        try (Connection connection = Conexion.getConnection()) {
-            String sql = "SELECT nombre FROM Categoria";
-            try (Statement statement = connection.createStatement(); ResultSet rs = statement.executeQuery(sql)) {
-                while (rs.next()) {
-                    categories.add(rs.getString("nombre"));
-                }
-            }
-        } catch (SQLException ex) {
-            ex.printStackTrace();
-        }
-        categoryComboBox.setModel(new DefaultComboBoxModel<>(categories.toArray(new String[0])));
+    protected void getCategorias() {
+        categoryComboBox.setModel(new DefaultComboBoxModel<>(mp.getCategorias().toArray(new String[0])));
     }
 
-    protected void updateTypeComboBox() {
-        String category = (String) categoryComboBox.getSelectedItem();
-        if (category == null) {
-            return;
+    protected void getTiposPorCategoria() {
+        String categoria = (String) categoryComboBox.getSelectedItem();
+        if (categoria != null) {
+            typeComboBox.setModel(new DefaultComboBoxModel<>(mp.getTiposPorCategoria(categoria).toArray(new String[0])));
         }
-        List<String> types = new ArrayList<>();
-        try (Connection connection = Conexion.getConnection()) {
-            String sql = "SELECT nombre FROM Tipos WHERE id_categoria = (SELECT id_categoria FROM Categoria WHERE nombre = ?)";
-            try (PreparedStatement stmt = connection.prepareStatement(sql)) {
-                stmt.setString(1, category);
-                try (ResultSet rs = stmt.executeQuery()) {
-                    while (rs.next()) {
-                        types.add(rs.getString("nombre"));
-                    }
-                }
-            }
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
-        typeComboBox.setModel(new DefaultComboBoxModel<>(types.toArray(new String[0])));
     }
 
-    protected void updateProductComboBox() {
-        String category = (String) categoryComboBox.getSelectedItem();
-        String type = (String) typeComboBox.getSelectedItem();
-        if (category == null || type == null) {
-            return;
-        }
-        List<String> products = new ArrayList<>();
-        try (Connection connection = Conexion.getConnection()) {
-            String sql = "SELECT talla FROM Productos WHERE id_tipo = (SELECT id_tipo FROM Tipos WHERE nombre = ? AND id_categoria = (SELECT id_categoria FROM Categoria WHERE nombre = ?))ORDER BY CAST(talla AS UNSIGNED) ASC, LENGTH(talla) ASC, talla ASC";
-            try (PreparedStatement stmt = connection.prepareStatement(sql)) {
-                stmt.setString(1, type);
-                stmt.setString(2, category);
-                try (ResultSet rs = stmt.executeQuery()) {
-                    while (rs.next()) {
-                        products.add(rs.getString("talla"));
-                    }
-                }
-            }
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
-        productComboBox.setModel(new DefaultComboBoxModel<>(products.toArray(new String[0])));
+    protected void getProductosPorTipo() {
+        String categoria = (String) categoryComboBox.getSelectedItem();
+        String tipo = (String) typeComboBox.getSelectedItem();
+        productComboBox.setModel(new DefaultComboBoxModel<>(mp.getProductosPorTipo(categoria, tipo).toArray(new String[0])));
     }
 
-    protected int getProductID(String category, String type, String product) {
-        int productId = 0;
-        try (Connection connection = Conexion.getConnection()) {
-            String sql = "SELECT id_producto FROM Productos WHERE talla = ? AND id_tipo = (SELECT id_tipo FROM Tipos WHERE nombre = ? AND id_categoria = (SELECT id_categoria FROM Categoria WHERE nombre = ?))";
-            try (PreparedStatement stmt = connection.prepareStatement(sql)) {
-                stmt.setString(1, product);
-                stmt.setString(2, type);
-                stmt.setString(3, category);
-                try (ResultSet rs = stmt.executeQuery()) {
-                    if (rs.next()) {
-                        productId = rs.getInt("id_producto");
-                    }
-                }
-            }
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
-        return productId;
-    }
-
-    protected abstract void registerAll(); // Implementación específica en cada panel
-
-    protected int getUserID() {
-        // Implementación según tu login (ej: almacenar ID en sesión)
-        return 1; // Valor temporal
-    }
 }
